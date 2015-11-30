@@ -6,28 +6,18 @@
 // -----------------------------------------------------------------------------
 
 long GetClassObject(const WCHAR_T* wsName, IComponentBase** pInterface) {
-  enum GET_CLASS_OBJECT_RESULT : long {
-    GCO_OK = 1,
-    GCO_FALSE = 0
-  };
-
   auto factory = ComponentRegister::instance().get(wsName);
   if (!factory) {
-    return GCO_FALSE;
+    return 0;
   }
 
   *pInterface = factory();
-  return GCO_OK;
+  return 1;
 }
 
 long DestroyObject(IComponentBase** pIntf) {
-  enum DestoyObjectResult : long {
-    DO_OK = 0,
-    DO_FALSE = 1
-  };
-
   delete *pIntf;
-  return DO_OK;
+  return 0;
 }
 
 const WCHAR_T* GetClassNames() {

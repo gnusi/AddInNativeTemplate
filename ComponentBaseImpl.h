@@ -11,40 +11,6 @@
 #include <functional>
 
 ////////////////////////////////////////////////////////////////////////////////
-/// Generic helper definitions for shared library support
-////////////////////////////////////////////////////////////////////////////////
-#if defined _MSC_VER || defined __CYGWIN__
-  #define COMPONENT_HELPER_DLL_IMPORT __declspec(dllimport)
-  #define COMPONENT_HELPER_DLL_EXPORT __declspec(dllexport)
-  #define COMPONENT_HELPER_DLL_LOCAL
-#else
-  #if __GNUC__ >= 4
-    #define COMPONENT_HELPER_DLL_IMPORT __attribute__ ((visibility ("default")))
-    #define COMPONENT_HELPER_DLL_EXPORT __attribute__ ((visibility ("default")))
-    #define COMPONENT_HELPER_DLL_LOCAL  __attribute__ ((visibility ("hidden")))
-  #else
-    #define COMPONENT_HELPER_DLL_IMPORT
-    #define COMPONENT_HELPER_DLL_EXPORT
-    #define COMPONENT_HELPER_DLL_LOCAL
-  #endif
-#endif
-
-// COMPONENT_API is used for the public API symbols. It either DLL imports or DLL exports (or does nothing for static build)
-// COMPONENT_LOCAL is used for non-api symbols.
-#ifdef COMPONENT_DLL
-  #ifdef COMPONENT_DLL_EXPORTS
-    #define COMPONENT_API COMPONENT_HELPER_DLL_EXPORT    
-  #else
-    #define COMPONENT_API COMPONENT_HELPER_DLL_IMPORT
-  #endif // COMPONENT_DLL_EXPORTS
-  #define COMPONENT_LOCAL COMPONENT_HELPER_DLL_LOCAL
-#else // COMPONENT_DLL is not defined: this means IRESEARCH is a static lib.
-  #define COMPONENT_API 
-  #define COMPONENT_API_TEMPLATE
-  #define COMPONENT_LOCAL
-#endif // COMPONENT_DLL
-
-////////////////////////////////////////////////////////////////////////////////
 /// @class base implementation of the IComponent iterface
 ////////////////////////////////////////////////////////////////////////////////
 class ComponentBaseImpl : public IComponentBase {
@@ -131,6 +97,43 @@ public:
   // LocaleBase
   virtual void ADDIN_API SetLocale(const WCHAR_T* loc);
 
+  void* malloc(unsigned long size) const;
+  void free(void** ptr) const;
+
+  template<typename T, typename... Args>
+  typename std::enable_if<!std::is_array<T>::value, T*>::type
+  alloc(Args&&... args) const {
+    T* ptr = static_cast<T*>(malloc(sizeof(T)));
+    if (ptr) {
+      try {
+        ::new (static_cast<void*>(ptr)) T(std::forward<Args>(args)...);
+      } catch (...) {
+        free(reinterpret_cast<void**>(&ptr));
+        throw;
+      }
+    }
+
+    return ptr;
+  }
+
+  template<typename T>
+  typename std::enable_if<
+    std::is_array<T>::value && std::extent<T,0>::value == 0, 
+    typename std::remove_extent<T>::type*
+  >::type alloc(size_t count) const {
+    typedef typename std::remove_extent<T>::type type;
+    type* ptr = static_cast<type*>(malloc(sizeof(type)*count));
+    if (ptr) {
+      try {
+        ::new (static_cast<void*>(ptr)) type[count];
+      } catch (...) {
+        free(reinterpret_cast<void**>(&ptr));
+        throw;
+      }
+    }
+    return ptr;
+  }
+
 protected:
   void add_property(
     const std::wstring& name,
@@ -143,16 +146,6 @@ protected:
     const Method::method_f& func,
     const Method::get_arg_list_t& args = {},
     const std::wstring& eng_name = std::wstring());
-
-  void* alloc(unsigned long size);
-
-  template<typename T>
-  T* alloc(unsigned long size) {
-    return reinterpret_cast<T*>(alloc(size));
-  }
-  
-  bool alloc_string(const std::wstring& str, WCHAR_T** out);
-  WCHAR_T* alloc_string(const std::wstring& str);
 
   IAddInDefBase* connect_;
   IMemoryManager* memory_;

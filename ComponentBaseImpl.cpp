@@ -1,7 +1,31 @@
 #include "ComponentBaseImpl.h"
 
 // -----------------------------------------------------------------------------
-// --SECTION--                                                     ComponentBaseImpl 
+// --SECTION--                                                             Utils
+// -----------------------------------------------------------------------------
+
+namespace memutils {
+
+bool copy_string(const ComponentBaseImpl& comp, const std::wstring& str, WCHAR_T** out) {
+  if (*out = comp.alloc<WCHAR_T[]>(size_t(str.size() + 1))) {
+    std::copy(str.begin(), str.end(), *out);
+    return true;
+  }
+
+  return false;
+}
+
+WCHAR_T* copy_string(const ComponentBaseImpl& comp, const std::wstring& str) {
+  WCHAR_T* out;
+  auto res = copy_string(comp, str, &out);
+  assert(res);
+  return out;
+}
+
+} // memutils
+
+// -----------------------------------------------------------------------------
+// --SECTION--                                                 ComponentBaseImpl 
 // -----------------------------------------------------------------------------
 
 ComponentBaseImpl::Property::Property(const std::wstring& name)
@@ -76,7 +100,7 @@ void ComponentBaseImpl::Done() {}
 
 // ILanguageExtenderBase
 bool ComponentBaseImpl::RegisterExtensionAs(WCHAR_T** extName) {
-  return alloc_string(name_, extName);
+  return memutils::copy_string(*this, name_, extName);
 }
 
 long ComponentBaseImpl::GetNProps() {
@@ -91,7 +115,7 @@ const WCHAR_T* ComponentBaseImpl::GetPropName(
   long lPropNum,
   long lPropAlias) {
   auto& prop = props_.at(lPropNum);
-  return alloc_string((lPropAlias ? prop.name : prop.eng_name));
+  return memutils::copy_string(*this, (lPropAlias ? prop.name : prop.eng_name));
 }
 
 bool ComponentBaseImpl::GetPropVal(
@@ -126,7 +150,7 @@ const WCHAR_T* ComponentBaseImpl::GetMethodName(
   const long lMethodNum,
   const long lMethodAlias) {
   auto& meth = methods_.at(lMethodNum);
-  return alloc_string(lMethodAlias ? meth.name : meth.eng_name);
+  return memutils::copy_string(*this, lMethodAlias ? meth.name : meth.eng_name);
 }
 
 long ComponentBaseImpl::GetNParams(const long lMethodNum) {
@@ -170,7 +194,7 @@ void ComponentBaseImpl::SetLocale(const WCHAR_T* loc) {
 #endif
 }
 
-void* ComponentBaseImpl::alloc(unsigned long size) {
+void* ComponentBaseImpl::malloc(unsigned long size) const {
   void* out{};
   if (memory_) {
     memory_->AllocMemory(&out, size);
@@ -178,21 +202,10 @@ void* ComponentBaseImpl::alloc(unsigned long size) {
   return out;
 }
 
-bool ComponentBaseImpl::alloc_string(const std::wstring& str, WCHAR_T** out) {
-  const unsigned long size = sizeof(WCHAR_T)*(str.size() + 1);
-  if (*out = alloc<WCHAR_T>(size)) {
-    std::copy(str.begin(), str.end(), *out);
-    return true;
+void ComponentBaseImpl::free(void** ptr) const {
+  if (memory_) {
+    memory_->FreeMemory(ptr);
   }
-
-  return false;
-}
-
-WCHAR_T* ComponentBaseImpl::alloc_string(const std::wstring& str) {
-  WCHAR_T* out;
-  auto res = alloc_string(str, &out);
-  assert(res);
-  return out;
 }
 
 void ComponentBaseImpl::add_property(
